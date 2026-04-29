@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Uptime Monitor</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <header>
+    <h1>Uptime Monitor</h1>
+    <form action="/sites/add" method="post" class="add-form">
+      <input name="name" placeholder="Label" required>
+      <input name="url" type="text" placeholder="https://example.com" required>
+      <button type="submit">Add site</button>
+    </form>
+  </header>
+  <main
+    hx-get="/partials/status-cards"
+    hx-trigger="load, every 30s"
+    hx-swap="innerHTML">
+    <p class="loading">Loading status…</p>
+  </main>
+
+  <!-- Notification Container -->
+  <div id="notificationContainer" class="notification-container"></div>
+
+  <!-- Delete Confirmation Modal -->
+  <div id="deleteModal" class="popup-overlay">
+    <div class="popup">
+      <div class="popup-title">Remove Website</div>
+      <div class="popup-msg">Are you sure you want to remove this website from monitoring?</div>
+      <div class="popup-actions">
+        <button class="popup-cancel" onclick="closeDeleteModal()">Cancel</button>
+        <button class="popup-confirm" id="confirmDeleteBtn">Remove</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let deleteWebsiteId = null;
+
+    function showDeleteModal(event, websiteId) {
+      event.preventDefault();
+      deleteWebsiteId = websiteId;
+      document.getElementById('deleteModal').classList.add('active');
+    }
+
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').classList.remove('active');
+      deleteWebsiteId = null;
+    }
+
+    document.getElementById('confirmDeleteBtn').addEventListener('click', async () => {
+      if (!deleteWebsiteId) return;
+      
+      const response = await fetch(`/api/websites/${deleteWebsiteId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.status === 204) {
+        closeDeleteModal();
+        htmx.ajax('GET', '/partials/status-cards', {target: 'main', swap: 'innerHTML'});
+      }
+    });
+
+    // Close modal on overlay click
+    document.getElementById('deleteModal').addEventListener('click', (e) => {
+      if (e.target.id === 'deleteModal') {
+        closeDeleteModal();
+      }
+    });
+
+    function showNotification(message, type = 'success', duration = 3000) {
+      const container = document.getElementById('notificationContainer');
+      const notification = document.createElement('div');
+      notification.className = `notification notification-${type}`;
+      notification.textContent = message;
+      
+      container.appendChild(notification);
+      
+      // Trigger animation
+      setTimeout(() => notification.classList.add('show'), 10);
+      
+      // Remove after duration
+      setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+      }, duration);
+    }
+
+    // Make showNotification globally available
+    window.showNotification = showNotification;
+  </script>
+</body>
+</html>

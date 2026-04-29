@@ -1,0 +1,106 @@
+<section class="cards-grid">
+{% for item in statuses %}
+  {% set log = item.latest_log %}
+  {% set up = log and log.is_up %}
+  <article class="card {{ 'up' if up else 'down' }}">
+    <div class="card-indicator"></div>
+    <div class="card-body">
+      <div class="card-header">
+        <div class="card-title-section">
+          <h2 class="card-name">{{ item.website.name }}</h2>
+        </div>
+        <div class="card-actions">
+          <button class="btn-edit" onclick="showEditPopup('edit-{{ item.website.id }}')" title="Edit website">
+            ✎
+          </button>
+          <button class="btn-delete"
+            onclick="showDeleteModal(event, {{ item.website.id }})"
+            title="Delete website">
+            ×
+          </button>
+        </div>
+      </div>
+      <a href="{{ item.website.url }}" target="_blank" rel="noopener noreferrer" class="card-url">{{ item.website.url }}</a>
+      <div class="card-meta">
+        <span class="badge {{ 'badge-up' if up else 'badge-down' }}">
+          {{ 'UP' if up else 'DOWN' }}
+        </span>
+        {% if log and log.response_time_ms is not none %}
+          <span class="latency">{{ log.response_time_ms | round(0) | int }} ms</span>
+        {% endif %}
+        {% if item.uptime_percent_24h is not none %}
+          <span class="uptime">{{ item.uptime_percent_24h }}% uptime (24h)</span>
+        {% endif %}
+      </div>
+      {% if log and log.error_message %}
+        <p class="error-msg">{{ log.error_message }}</p>
+      {% endif %}
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="popup-overlay" id="edit-{{ item.website.id }}" onclick="closeOnOverlay(event, this)">
+      <div class="popup">
+        <div class="popup-title">Edit site</div>
+        <div class="edit-form">
+          <label>Name</label>
+          <input id="edit-name-{{ item.website.id }}" type="text" value="{{ item.website.name }}" class="edit-input">
+          <label>URL</label>
+          <input id="edit-url-{{ item.website.id }}" type="url" value="{{ item.website.url }}" class="edit-input">
+        </div>
+        <div class="popup-actions">
+          <button class="popup-cancel" onclick="hidePopup('edit-{{ item.website.id }}')">Cancel</button>
+          <button class="popup-confirm popup-save" onclick="submitEdit({{ item.website.id }})">Save</button>
+        </div>
+      </div>
+    </div>
+  </article>
+
+{% else %}
+  <p class="loading">No sites monitored yet. Add one above.</p>
+{% endfor %}
+</section>
+<script>
+function showPopup(id) {
+  document.getElementById(id).classList.add('active');
+}
+function hidePopup(id) {
+  document.getElementById(id).classList.remove('active');
+}
+function closeOnOverlay(e, el) {
+  if (e.target === el) el.classList.remove('active');
+}
+function showEditPopup(id) {
+  document.getElementById(id).classList.add('active');
+}
+
+async function submitEdit(id) {
+  const name = document.getElementById('edit-name-' + id).value.trim();
+  const url  = document.getElementById('edit-url-'  + id).value.trim();
+  if (!name || !url) {
+    window.showNotification('Name and URL are required', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/websites/' + id, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, url }),
+    });
+
+    if (res.ok) {
+      hidePopup('edit-' + id);
+      window.showNotification('Website updated successfully!', 'success');
+      // Refresh the cards to show updated values
+      setTimeout(() => {
+        htmx.ajax('GET', '/partials/status-cards', {target: 'main', swap: 'innerHTML'});
+      }, 500);
+    } else {
+      const error = await res.json().catch(() => ({}));
+      window.showNotification(`Error: ${error.detail || 'Failed to update website'}`, 'error');
+    }
+  } catch (err) {
+    window.showNotification(`Error: ${err.message}`, 'error');
+  }
+}
+</script>
